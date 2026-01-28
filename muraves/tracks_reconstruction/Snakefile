@@ -1,5 +1,5 @@
 configfile: 'config.yaml'
-configfile: '../tag/requirements.yaml'
+configfile: '../../tag/requirements.yaml'
 
 # IMPROVEMENTS:
 # The number of boards and channel should go in another configuration file
@@ -24,7 +24,7 @@ localrules: all
 rule all:
     input:
         expand(
-        '{path}/PARSED/{color}/{version}/{type}_run{run}.txt',
+        '{path}/RECONSTRUCTED/{color}/{version}/MURAVES_AnalyzedData_run{run}.root',
             path=config['data_path'],
             color=config['hodoscope'],
             version = config['version'],
@@ -79,7 +79,7 @@ rule pedestal_analysis:
 
 rule analyse:
     input:
-        main_script = "4_MainRecSof/MURAVES_reco_v2.cpp",
+        main_script = "4_MainRecSof/MURAVES_reco_v02-01.cpp", # make sure that scriptname is correct
         script_1 = "4_MainRecSof/ClusterLists.cc",
         script_2 =  "4_MainRecSof/EvaluateAngularCoordinates.cc",
         script_3 = "4_MainRecSof/ReadEvent.cc",
@@ -93,9 +93,9 @@ rule analyse:
     output:
         output_filename = '{path}/RECONSTRUCTED/{color}/{version}/MURAVES_AnalyzedData_run{run}.root',
     shell: "g++ -std=c++20 {input.script_4} {input.script_3} {input.script_2} {input.script_1} {input.main_script} "
-           "-o 4_MainRecSof/MURAVES_reco_v2.exe "
+           "-o 4_MainRecSof/MURAVES_reco_v02-01.exe " # make sure that scriptname is correct
            "$(root-config --cflags --libs) -lSpectrum "
            "-I/opt/conda/envs/muraves/include/python3.11 "
             "-L/opt/conda/envs/muraves/lib -lpython3.11 &&"
-            "./4_MainRecSof/MURAVES_reco_v2.exe {wildcards.color} {wildcards.run} {wildcards.run}"
+            "./4_MainRecSof/MURAVES_reco_v02-01.exe {wildcards.color} {wildcards.run} {wildcards.run}" # make sure that scriptname is correct
 
