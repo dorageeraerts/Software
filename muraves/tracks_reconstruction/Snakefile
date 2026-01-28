@@ -1,21 +1,27 @@
 configfile: 'config.yaml'
 configfile: '../../tag/requirements.yaml'
 
+data_path = config['data_path']
+
 # IMPROVEMENTS:
 # The number of boards and channel should go in another configuration file
 
 #Function to convert runs of config file to list of runs
 def parse_runs(run_str):
     runs = []
-    for part in run_str.split(','):
-        part = part.strip()
-        if '-' in part:
-            start, end = map(int, part.split('-'))
-            runs.extend(range(start, end + 1))
-        else:
-            runs.append(int(part))
+    try:
+        for part in run_str.split(','):
+            part = part.strip()
+            if '-' in part:
+                start, end = map(int, part.split('-'))
+                runs.extend(range(start, end + 1))
+            else:
+                runs.append(int(part))
+        
+    except:
+        runs.append(run_str)
+    
     return [str(r) for r in runs] 
-
 runs = parse_runs(config['run']) # convert config file format into list of runs.
 
 localrules: all
@@ -24,8 +30,14 @@ localrules: all
 rule all:
     input:
         expand(
+<<<<<<< HEAD
         '{path}/RECONSTRUCTED/{color}/{version}/MURAVES_AnalyzedData_run{run}.root',
             path=config['data_path'],
+=======
+        '{path}/PEDESTAL/{color}/{version}/{run}/pedestal_{n}.cfg',
+            n = range(16),
+            path=config['output_path'],
+>>>>>>> upstream/master
             color=config['hodoscope'],
             version = config['version'],
             type=config['type'],
@@ -38,13 +50,16 @@ rule parse:
         script='1_Parser/prep.py',
     params:
         #rawfile_path = '{path}/RAW_GZ/{color}',
-        optional_input_files = ['{path}/RAW_GZ/{color}/SLOWCONTROL_run{run}.gz', '{path}/RAW_GZ/{color}/LOG_run{run}.gz', '{path}/RAW_GZ/{color}/CONTEGGI_run{run}.gz']
+        optional_input_files = [f'{data_path}/RAW_GZ/{{color}}/SLOWCONTROL_run{{run}}.gz',
+                                f'{data_path}/RAW_GZ/{{color}}/LOG_run{{run}}.gz', 
+                                f'{data_path}/RAW_GZ/{{color}}/CONTEGGI_run{{run}}.gz'
+                                ]
 
     output:
         output_filename = '{path}/PARSED/{color}/{version}/{type}_run{run}.txt',
         status_file = '{path}/PARSED/{color}/{version}/{type}_run{run}.json',
-        log_file = '{path}/PARSED/{color}/{version}/{type}_run{run}.log'
-    shell: "python {input.script} -i {params.optional_input_files} -t {wildcards.type} -r {wildcards.run} -o {output.output_filename} -l {output.log_file} -j {output.status_file}"
+        #log_file = '{path}/PARSED/{color}/{version}/{type}_run{run}.log'
+    shell: "python {input.script} -i {params.optional_input_files} -t {wildcards.type} -r {wildcards.run} -o {output.output_filename} -l {{config['log_on_console']}} -j {output.status_file}"
 
 
 

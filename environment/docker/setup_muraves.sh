@@ -55,6 +55,9 @@ WORKSPACE_CONTAINER="/workspace"
 DIR_HOST="/pnfs/iihe/muraves/muraves_DATA"
 DIR_CONTAINER="/data"
 
+OUTPUT_HOST="/group/Muography/MURAVES/"
+OUTPUT_CONTAINER="/outputs"
+
 
 
 # If no command is passed, default to bash
@@ -66,7 +69,7 @@ fi
 
 
 # Execute entrypoint inside the container
-singularity exec --bind ${WORKSPACE_HOST}:${WORKSPACE_CONTAINER},${DIR_HOST}:${DIR_CONTAINER} \
+singularity exec --bind ${WORKSPACE_HOST}:${WORKSPACE_CONTAINER},${DIR_HOST}:${DIR_CONTAINER},${OUTPUT_HOST}:${OUTPUT_CONTAINER},  \
     --pwd ${WORKSPACE_CONTAINER} \
     ${SIF_PATH} /workspace/Software/environment/docker/entrypoint.sh ${CMD}
     

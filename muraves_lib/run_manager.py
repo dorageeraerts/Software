@@ -8,6 +8,8 @@ from muraves_lib import file_handler
 from tqdm import tqdm
 import logging
 import numpy as np
+import json
+import os
 
 def get_orientation(run_number: int, color: str) -> str:
     """
@@ -46,14 +48,14 @@ def get_orientation(run_number: int, color: str) -> str:
     
     return orientation
 
-# save info in a dataframe
-def create_database(raw_gz_path, output_path='./', color_list = ['BLU', 'NERO', 'ROSSO']):
+# save info in a dataframe alice function
+def create_database(raw_gz_path, output_path='./', color_list = ['BLU', 'NERO', 'ROSSO'], suffix = '' ):
 
     rows=[]
     for color in color_list:
         #List the files to parse
         path = f'{raw_gz_path}/{color}/'
-        file_list = glob(f"{path}/SLOWCONTROL*.gz")
+        file_list = glob(f"{path}/SLOWCONTROL*{suffix}*.gz")
         logging.info(f"Number of files to decompress and parse:{len(file_list)}")
 
         #Loop over the files
@@ -89,8 +91,84 @@ def create_database(raw_gz_path, output_path='./', color_list = ['BLU', 'NERO', 
                 print(f"Error decompressing file: {err}")
 
     df = pd.DataFrame(rows)
-    df.to_csv(f"{output_path}/run_index.csv", index=True)
+    #df.to_csv(f"{output_path}/run_index.csv", index=True)
     df.to_pickle(f"{output_path}/data_scan.pkl")
     logging.debug(df.head())
 
     return df
+
+def create_database_chunk(
+    raw_gz_path,
+    output_path='./',
+    color_list=['BLU', 'NERO', 'ROSSO'],
+    suffix='',
+    chunk_size=2000,
+    state_file='state.json'
+):
+    # Carica lo stato precedente, se esiste
+    if os.path.exists(state_file):
+        with open(state_file, 'r') as f:
+            state = json.load(f)
+    else:
+        state = {"processed_files": [], "last_chunk": 0}
+
+    rows = []
+    processed_files = set(state["processed_files"])
+
+    for color in color_list:
+        path = f'{raw_gz_path}/{color}/'
+        file_list = glob(f"{path}/SLOWCONTROL*{suffix}*.gz")
+        file_list = [f for f in file_list if f not in processed_files]
+
+        logging.info(f"Number of files to process for {color}: {len(file_list)}")
+
+        for file in tqdm(file_list):
+            decompressed_file, err = file_handler.decompress(file)
+            if err is None:
+                run_filename = decompressed_file.split('run')[-1]
+                slowcontrol_data = file_handler.parse_slow_control(decompressed_file, target_run=run_filename)
+                rows.append({
+                    "hodoscope": color,
+                    "run": slowcontrol_data[0]['run'] + 1,
+                    "timestamp": slowcontrol_data[0]['timestamp'],
+                    "day": slowcontrol_data[0]['day'],
+                    "hour": slowcontrol_data[0]['hour'],
+                    "wp": slowcontrol_data[0]['wp'],
+                    "temperature": slowcontrol_data[0]['temperature'],
+                    "humidity": slowcontrol_data[0]['humidity'],
+                    "trigger_rate": slowcontrol_data[0]['tr'],
+                    "accidental_rate": slowcontrol_data[0]['ar'],
+                    "orientation": run_manager.get_orientation(slowcontrol_data[0]['run'] + 1, color),
+                })
+                processed_files.add(file)
+            else:
+                logging.error(f"Error decompressing file: {err}")
+
+            # Salva ogni chunk_size file
+            if len(processed_files) % chunk_size == 0:
+                df = pd.DataFrame(rows)
+                df.to_pickle(f"{output_path}/data_scan_chunk_{state['last_chunk'] + 1}.pkl")
+                state["last_chunk"] += 1
+                state["processed_files"] = list(processed_files)
+                with open(state_file, 'w') as f:
+                    json.dump(state, f)
+                logging.info(f"Saved chunk {state['last_chunk']} with {len(processed_files)} files processed.")
+
+    # Salva l'ultimo chunk se necessario
+    if len(rows) > 0:
+        df = pd.DataFrame(rows)
+        df.to_pickle(f"{output_path}/data_scan_chunk_{state['last_chunk'] + 1}.pkl")
+        state["last_chunk"] += 1
+        state["processed_files"] = list(processed_files)
+        with open(state_file, 'w') as f:
+            json.dump(state, f)
+
+    # Unisci tutti i chunk in un unico file (opzionale)
+    all_chunks = []
+    for i in range(1, state["last_chunk"] + 1):
+        chunk_df = pd.read_pickle(f"{output_path}/data_scan_chunk_{i}.pkl")
+        all_chunks.append(chunk_df)
+    final_df = pd.concat(all_chunks, ignore_index=True)
+    final_df.to_pickle(f"{output_path}/data_scan_final.pkl")
+
+    return final_df

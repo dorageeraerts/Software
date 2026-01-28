@@ -1,6 +1,7 @@
 # Path where RAW_GZ folder is located. Here all the outputs will be saved.
 # For production on T2B -> data_path: "/pnfs/iihe/muraves/muraves_DATA/"
-data_path: "/workspace/test" 
+data_path: "/data" 
+output_path: "/outputs/tmp"
 hodoscope:
   #- BLU
   - NERO
@@ -10,11 +11,21 @@ type:
   #- PIEDISTALLI
 run:
   # A-B: execute from A to B
+<<<<<<< HEAD
   #2500-2502
+=======
+  #2500-2509
+>>>>>>> upstream/master
 
   # A,B execute A and B
   #2500,2509
   
   # A: execute A
+<<<<<<< HEAD
   "2501"
+=======
+  "2500"
+
+logs_on_console: False #(True/False)
+>>>>>>> upstream/master
 

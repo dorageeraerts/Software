@@ -68,7 +68,7 @@ $$ P1 \land P2 \land P3 \land signal > 6~phe$$
 
 In particular when refering to a plane: $P1(2,3)$ the trigger is set on the logic OR among the 64 scintillating bars composing a plane:
 
-$$ (P1z~ \cup ~P1y) \cap~ (P2z~ \cup ~P2y) \cap~ (P3z~ \cup ~P3y)$$
+$$ (P1z~ \cap ~P1y) \cap~ (P2z~ \cap ~P2y) \cap~ (P3z~ \cap ~P3y)$$
 
 ### Runs
 The definition of the run changes depending on the type of run:

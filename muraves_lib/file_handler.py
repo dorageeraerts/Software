@@ -46,11 +46,14 @@ def read_run_info_from_json(filename, subdict='slowcontrol') -> dict:
         "accidental_rate": accidental_rate
     }
 
-def decompress(filename) -> str:
+def decompress(filename, destination_path = "/workspace/tmp/DECOMPRESSED/") -> str:
     gz_path = Path(filename)
-    out_filename = Path(str(gz_path.with_suffix("")).replace("RAW_GZ", "DECOMPRESSED"))# removes .gz extension
-    out_path = str(out_filename.parent)
-    os.makedirs(out_path, exist_ok=True)
+    gz_filename = gz_path.stem # removes .gz extension
+    out_path_root = Path(destination_path)
+    os.makedirs(out_path_root, exist_ok=True)
+    out_filename = out_path_root / gz_filename
+    #out_path = str(out_filename.parent)
+    #os.makedirs(out_path, exist_ok=True)
 
 
     ctrl = 0
