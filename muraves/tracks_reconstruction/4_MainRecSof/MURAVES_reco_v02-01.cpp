@@ -121,7 +121,8 @@ int main(int argc, char* argv[]) {
   char SavingPath_miniTree[100];
   strcpy(SavingPath_miniTree,"/workspace/test/RECONSTRUCTED/");
   strncat(SavingPath_miniTree,color,10);
-  strncat(SavingPath_miniTree,"/",1);
+  //strncat(SavingPath_miniTree,"/",1);
+  strncat(SavingPath_miniTree,"/v0/",6);
   //strncat(SavingPath_miniTree,"/MINI_TREESLowerEnTh/",45);
   //strncat(SavingPath_miniTree,"/MINI_TREES/",35);
   strcpy(MiniRunTreeName,SavingPath_miniTree);
@@ -176,6 +177,9 @@ int main(int argc, char* argv[]) {
   cout<< ADC_File_name <<endl;
   // USE PYTHON GLOB.GLOB TO FIND THE TAIL OF THE FILE NAME /////
   Py_Initialize();
+  // Acquire the GIL for this Python call block
+  PyGILState_STATE gstate;
+  gstate = PyGILState_Ensure();
   // Add the current directory to sys.path
   PyRun_SimpleString("import sys");
   PyRun_SimpleString("import os");
@@ -197,8 +201,8 @@ int main(int argc, char* argv[]) {
   } 
   PyObject *ADC_name_toPy = PyTuple_New(1);
   PyTuple_SetItem(ADC_name_toPy, 0, PyUnicode_FromString(ADC_File_name));
-  CPyObject CompleteFileName;
-  CompleteFileName =  PyObject_CallObject(SearchFile_func,ADC_name_toPy);
+  //CPyObject CompleteFileName;
+  CPyObject CompleteFileName =  PyObject_CallObject(SearchFile_func,ADC_name_toPy);
   if (!CompleteFileName) {
     PyErr_Print();  // this will show the actual Python exception
     std::cerr << "Error: call to SearchFile_func failed" << std::endl;
@@ -215,6 +219,14 @@ int main(int argc, char* argv[]) {
   cout << "ADC file: " ;
 
   puts(Complete_ADCfile_name); 
+
+  Py_DECREF(ADC_name_toPy);
+  CompleteFileName = nullptr;    // releases underlying Python object
+  SearchFile_func = nullptr;
+  Module_SearchAFile = nullptr;
+  pName_searchFile = nullptr;
+
+  PyGILState_Release(gstate);
   Py_Finalize();
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -590,7 +602,7 @@ int main(int argc, char* argv[]) {
   int st, ch;
   vector <int>  strips, channels, sorted_ch,sorted_strips;
   string line_c;  
-  Spiroc_config.open("/workspace/Software/tracks_reconstruction/AncillaryFiles/spiroc-hybrid-map.cfg");
+  Spiroc_config.open("/workspace/Software/muraves/tracks_reconstruction/AncillaryFiles/spiroc-hybrid-map.cfg");
   int l=0;
   /// //READING SPIROC/HYRID MAP FILE //////////////////////////////////////////////////////////////
   if(Spiroc_config.is_open()) {
@@ -635,7 +647,8 @@ int main(int argc, char* argv[]) {
     //char PED_FOLDER[15];
     //strcpy(PED_FOLDER,"ped");
     strncat(ConfigPed_file,color,6);
-    strncat(ConfigPed_file, "/", 1);
+    //strncat(ConfigPed_file, "/", 1);
+    strncat(ConfigPed_file, "/v0/", 6); // should be changed to wildcard version
     strncat(ConfigPed_file, run_string, 6);
     strncat(ConfigPed_file, "/", 1);
     cout<<ConfigPed_file<<endl;
@@ -720,10 +733,9 @@ int main(int argc, char* argv[]) {
 
   // READ TELESCOPE CONFIGURATION  ----> CORRESPONDACE BOARD - N STATION - VIEW //////// ///////////////////////////////
   char  telescopeConfig_name[10000];
-  strcpy(telescopeConfig_name,"/workspace/Software/tracks_reconstruction/AncillaryFiles/telescope");
+  strcpy(telescopeConfig_name,"/workspace/Software/muraves/tracks_reconstruction/AncillaryFiles/telescope");
   strncat(telescopeConfig_name,color,10);
   strncat(telescopeConfig_name,".cfg",5);
-  
   ifstream file_telescope;
   file_telescope.open(telescopeConfig_name);
   string tel_line;
@@ -824,8 +836,8 @@ int main(int argc, char* argv[]) {
   datime.Set(y,mt,d,h,m,s);
   datime.Print();
   int ev =0;
-int  NGooDTracks3p=0;
-int  NGooDTracks4p=0;
+  int  NGooDTracks3p=0;
+  int  NGooDTracks4p=0;
   if (ADCfile.is_open()) {
     while (getline(ADCfile, event))
       {

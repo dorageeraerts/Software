@@ -30,14 +30,8 @@ localrules: all
 rule all:
     input:
         expand(
-<<<<<<< HEAD
         '{path}/RECONSTRUCTED/{color}/{version}/MURAVES_AnalyzedData_run{run}.root',
-            path=config['data_path'],
-=======
-        '{path}/PEDESTAL/{color}/{version}/{run}/pedestal_{n}.cfg',
-            n = range(16),
             path=config['output_path'],
->>>>>>> upstream/master
             color=config['hodoscope'],
             version = config['version'],
             type=config['type'],
