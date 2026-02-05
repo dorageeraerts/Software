@@ -209,11 +209,6 @@ int main(int argc, char* argv[]) {
     return 1; // or handle differently
   }
 
-  if (!PyUnicode_Check(CompleteFileName.getObject())) {
-    std::cerr << "Search_File did not return a string\n";
-    return 1;
-}
-
   Py_ssize_t size;
   const char *Complete_ADCfile_name = PyUnicode_AsUTF8AndSize(CompleteFileName.getObject(), &size); // ----> COMPLETE NAME 
   cout << "ADC file: " ;
@@ -617,6 +612,10 @@ int main(int argc, char* argv[]) {
 	  l++;
       }
   }
+  else {
+    std::cerr << "Error: Spiroc_config is not open; Probably due to wrong path to Spiroc Hybrid Map" << std::endl;
+    return 1; // or handle differently
+  }
   Spiroc_config.close();
   //////////////////////////////////////////////////////////////////////////////////////////////////////
     
@@ -691,7 +690,7 @@ int main(int argc, char* argv[]) {
     strncat(Ped_fileName,".cfg",5);
     FilePED.open(Ped_fileName);
     l=0;
-    if(FilePED.is_open()) {
+    if (FilePED.is_open()) {
       while (getline(FilePED, line_c))
 	{
 	  istringstream iss(line_c);
@@ -708,6 +707,10 @@ int main(int argc, char* argv[]) {
 	}
       FilePED.close();
     }
+  else {
+    std::cerr << "Error: FilePED is not open; Probably due to wrong path to pedestal files in Ped_fileName" << std::endl;
+    return 1; // or handle differently
+  }
     //////////// SORT FOLLOWING THE STRIP ORDER   /////////////////
     for(int ind=0; ind<sorted_ch.size(); ind++) {
       sorted_Peds.push_back(Peds.at( sorted_ch.at(ind)));
@@ -738,6 +741,10 @@ int main(int argc, char* argv[]) {
   strncat(telescopeConfig_name,".cfg",5);
   ifstream file_telescope;
   file_telescope.open(telescopeConfig_name);
+  if (!file_telescope.is_open()) {
+    std::cerr << "Error: file_telescope is not open; Probably due to wrong path to AncillaryFiles in telescopeConfig_name" << std::endl;
+    return 1; // or handle differently
+  }
   string tel_line;
   char *tel_ptr;
   char c_line[100];
