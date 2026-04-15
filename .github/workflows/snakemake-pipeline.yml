@@ -38,7 +38,7 @@ jobs:
       - name: Build Docker image
         working-directory: environment/docker
         run: |
-          docker build -t muraves:latest -f environment/docker/Dockerfile .
+          docker build -t muraves:latest -f Dockerfile .
 
       - name: Run Snakemake workflow in container
         run: |
