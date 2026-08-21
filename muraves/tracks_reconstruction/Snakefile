@@ -45,7 +45,7 @@ def parse_batch_indices(batch_string):
 
 #>>>>>~~~~~~~~~~~~~~~~~~ GLOBAL PARAMETERS  ~~~~~~~~~~~~~~~~~~~
 PNFS = config['data_path']
-HOME = os.path.expandvars('/user/abiolchi/muraves_outputs')
+HOME = os.path.expandvars('/user/dgeeraer/MURAVES/output_track_reconstruction')
 BATCH_SIZE = config['batch_size'] 
 THREADS = config['threads']
 EXEC_CFG = config.get('execution_config', {})
@@ -85,7 +85,7 @@ rule all:
 
 rule parse_batch:
     threads: THREADS
-    container: '/user/abiolchi/muraves-sing.sif'
+    container: '/user/dgeeraer/muraves-sing.sif'
     input:
         script="1_Parser/prep.py"
     params:
@@ -148,7 +148,7 @@ rule parse_batch:
 # This replaces the per-run `pedestal_analysis` rule in the reconstruction chain, so runs
 # no longer need the PIEDISTALLI parse/prereco/pedestal_analysis steps.
 rule pedestal_reader:
-    container: '/user/abiolchi/muraves-sing.sif'
+    container: '/user/dgeeraer/muraves-sing.sif'
     input:
         script = '3_PedAna/PedestalReader.py',
         benchmark_files = lambda wildcards: expand(
@@ -177,7 +177,7 @@ rule pedestal_reader:
 
 rule analyse:
     threads: THREADS
-    container: '/user/abiolchi/muraves-sing.sif'
+    container: '/user/dgeeraer/muraves-sing.sif'
     input:
         script = "4_MainRecSof/MURAVES_reco.py",
         data_file = '{output_path}/PARSED/{color}/{version}/ADC_batch{batch_idx}.stamp',

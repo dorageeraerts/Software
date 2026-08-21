@@ -2,7 +2,12 @@
 # For production on T2B -> data_path: "/pnfs/iihe/muraves/muraves_DATA/"
 
 #-----------processing parameters-----------------
+<<<<<<< Updated upstream
 data_path: '/data' # Path where data are stored ['/user/abiolchi/Software/test_data','/data',"/pnfs/iihe/muraves/muraves_DATA", ...]. 
+=======
+#data_path: '/user/abiolchi/Software/test_data' # Path where data are stored ['/data',"/pnfs/iihe/muraves/muraves_DATA", ...]. 
+data_path: '/pnfs/iihe/muraves/muraves_DATA'
+>>>>>>> Stashed changes
 # This should be the path recongnised by the condor node or the container where the code is executed.
 
 #scratch_path: "$TMPDIR" 
@@ -40,7 +45,11 @@ run:
   2500,2509
   
   # A: execute A
+<<<<<<< Updated upstream
   #"2500"
+=======
+  "2400"
+>>>>>>> Stashed changes
 
 
 logs_on_console: False #(True/False)
