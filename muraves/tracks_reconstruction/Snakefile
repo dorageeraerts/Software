@@ -83,21 +83,21 @@ rule all:
         )
 
 
-rule parse_batch:
-    threads: THREADS
-    container: '/user/dgeeraer/muraves-sing.sif'
-    input:
-        script="1_Parser/prep.py"
-    params:
-        raw_data_path=f'{PNFS}/RAW_GZ/{{color}}',
-        runs=lambda wildcards:
-            ( BATCHES[int(wildcards.batch_idx)] if config.get('run')
-                else list(range(int(wildcards.batch_idx) * BATCH_SIZE, int(wildcards.batch_idx) * BATCH_SIZE + BATCH_SIZE))
-            ),  
-    output:
-        output_filename="{output_path}/PARSED/{color}/{version}/{type}_batch{batch_idx}.stamp" #Questo output contiene la lista dei file prodotti dal batch, che saranno usati come input per le regole successive.
-    shell:
-        "python {input.script} -i {params.raw_data_path} -th {threads} -t {wildcards.type} -r {params.runs} -o {output.output_filename} -l {log_on_console} -v {verbose} -ow {overwrite_outputs}"
+#rule parse_batch:
+#    threads: THREADS
+#    container: '/user/dgeeraer/muraves-sing.sif'
+#    input:
+#        script="1_Parser/prep.py"
+#    params:
+#        raw_data_path=f'{PNFS}/RAW_GZ/{{color}}',
+#        runs=lambda wildcards:
+#            ( BATCHES[int(wildcards.batch_idx)] if config.get('run')
+#                else list(range(int(wildcards.batch_idx) * BATCH_SIZE, int(wildcards.batch_idx) * BATCH_SIZE + BATCH_SIZE))
+#            ),  
+#    output:
+#        output_filename="{output_path}/PARSED/{color}/{version}/{type}_batch{batch_idx}.stamp" #Questo output contiene la lista dei file prodotti dal batch, che saranno usati come input per le regole successive.
+#    shell:
+#        "python {input.script} -i {params.raw_data_path} -th {threads} -t {wildcards.type} -r {params.runs} -o {output.output_filename} -l {log_on_console} -v {verbose} -ow {overwrite_outputs}"
 
 # Alice: with the new pedestal reader these two steps are not needed anymore
 #rule prereco:
@@ -180,7 +180,7 @@ rule analyse:
     container: '/user/dgeeraer/muraves-sing.sif'
     input:
         script = "4_MainRecSof/MURAVES_reco.py",
-        data_file = '{output_path}/PARSED/{color}/{version}/ADC_batch{batch_idx}.stamp',
+        data_file = '{output_path}/PARSED/{color}/v0/ADC_batch{batch_idx}.stamp',
         one_phe_files = "{output_path}/PEDESTAL/{color}/{version}/PEDESTAL_BENCHMARK_{color}.stamp",
         reco_parameters = RECO_PARAMETERS_FILE,
         spiroc_mapping = SPIROC_MAPPING_FILE,
