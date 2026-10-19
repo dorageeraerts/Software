@@ -279,11 +279,13 @@ _SHARED_COUNTER_GROUPS: dict[str, list[str]] = {
     # mismatches/40000).
     "Track4pGroup_xz": [
         "Intercept_4p_xz", "Slope_4p_xz", "chiSquare_4p_xz",
-        "displacement_p4_xz", "cluster_c4_index_xz", "ScatteringAngle_xz",
+        "displacement_p4_xz", "cluster_c4_index_xz", "ScatteringAngle_xz", 
+        "Residue_Track4p_z1", "Residue_Track4p_z2", "Residue_Track4p_z3", "Residue_Track4p_z4"
     ],
     "Track4pGroup_xy": [
         "Intercept_4p_xy", "Slope_4p_xy", "chiSquare_4p_xy",
         "displacement_p4_xy", "cluster_c4_index_xy", "ScatteringAngle_xy",
+        "Residue_Track4p_y1", "Residue_Track4p_y2", "Residue_Track4p_y3", "Residue_Track4p_y4"
     ],
 }
 
@@ -1353,6 +1355,15 @@ def run_reconstruction(
                 "cluster_c4_index_xy": tracks_xy.cluster_indices_4,
                 "ScatteringAngle_xz": tracks_xz.ScatteringAngles,
                 "ScatteringAngle_xy": tracks_xy.ScatteringAngles,
+
+                "Residue_Track4p_z1": tracks_xz.residue_c1_p4,
+                "Residue_Track4p_z2": tracks_xz.residue_c2_p4,
+                "Residue_Track4p_z3": tracks_xz.residue_c3_p4,
+                "Residue_Track4p_z4": tracks_xz.residue_c4_p4,
+                "Residue_Track4p_y1": tracks_xy.residue_c1_p4,
+                "Residue_Track4p_y2": tracks_xy.residue_c2_p4,
+                "Residue_Track4p_y3": tracks_xy.residue_c3_p4,
+                "Residue_Track4p_y4": tracks_xy.residue_c4_p4,
 
                 "isInTrack_3p_clZ1": tracks_xz.IsInTrack_clusters1,
                 "isInTrack_3p_clZ2": tracks_xz.IsInTrack_clusters2,
