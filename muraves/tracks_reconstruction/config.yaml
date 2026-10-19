@@ -2,14 +2,15 @@
 # For production on T2B -> data_path: "/pnfs/iihe/muraves/muraves_DATA/"
 
 #-----------processing parameters-----------------
-data_path: '/data' # Path where data are stored ['/user/abiolchi/Software/test_data','/data',"/pnfs/iihe/muraves/muraves_DATA", ...]. 
+#data_path: '/user/abiolchi/Software/test_data' # Path where data are stored ['/data',"/pnfs/iihe/muraves/muraves_DATA", ...]. 
+data_path: '/pnfs/iihe/muraves/muraves_DATA'
 # This should be the path recongnised by the condor node or the container where the code is executed.
 
 #scratch_path: "$TMPDIR" 
 # temporary folder for intermediate files: it will be deleted at the end of the execution
 # it works on condor node, working node or on your local laptop.
 
-copy_to_data: False 
+copy_to_data: True 
 # True:  temporary files will be copied to the data_path at the end of the execution, and deleted from the scratch_path
 # False: they will be copied into your home directory $HOME/muraves_outputs, and deleted from the scratch_path
 
@@ -20,14 +21,14 @@ threads: 1 # number of cores requested per rule.
 #-----------selection parameters-----------------
 hodoscope:
   #- BLU 
-  - NERO
+  - ROSSO
 
 type:
   #- ADC or PIEDISTALLI
   - ADC
 
 batch_idx: 
-  #"0" #"0-100" # batch of runs to be executed. It can be specified as:
+  "7, 13, 23, 30, 32, 35, 39, 53, 58, 68, 70, 73, 75, 106, 116, 140, 143, 144, 145, 147" #"0-100" # batch of runs to be executed. It can be specified as:
 
 run:
   # A-B: execute from A to B
@@ -37,7 +38,7 @@ run:
   # BLU highest run is 10011
 
   # A,B execute A and B
-  2500,2509
+  #2500,2509
   
   # A: execute A
   #"2500"
@@ -45,7 +46,7 @@ run:
 
 logs_on_console: False #(True/False)
 verbose: info # (debug/info/warning/error/critical)
-overwrite_outputs: True # (True/False) if True, existing output files will be overwritten. If False, existing output files will be kept and the corresponding runs will be skipped.
+overwrite_outputs: False # (True/False) if True, existing output files will be overwritten. If False, existing output files will be kept and the corresponding runs will be skipped.
 
 #-----------execution configuration files-----------------
 execution_config:

@@ -38,7 +38,7 @@ jobs:
       - name: Build Docker image
         working-directory: environment/docker
         run: |
-          docker build -t muraves:latest .
+          docker build -t muraves:latest -f Dockerfile .
 
       - name: Run Snakemake workflow in container
         run: |
@@ -47,8 +47,14 @@ jobs:
             -v ${{ github.workspace }}/test_data:/data \
             muraves:latest bash -c \
             "cd muraves/tracks_reconstruction && \
-             python -m pip install --quiet pyyaml && \
-             python -c \"import yaml, pathlib; p=pathlib.Path('config.yaml'); c=yaml.safe_load(p.read_text()); c.update({'data_path':'/data','copy_to_data':False,'batch_size':1,'threads':1,'batch_idx':'2500','run':None,'logs_on_console':True,'verbose':'info','overwrite_outputs':False}); p.write_text(yaml.safe_dump(c, sort_keys=False))\" && \
+             sed -i \"s|data_path:.*|data_path: '/data'|\" config.yaml && \
+             sed -i \"s|copy_to_data:.*|copy_to_data: False|\" config.yaml && \
+             sed -i \"s|batch_size:.*|batch_size: 1|\" config.yaml && \
+             sed -i \"s|threads:.*|threads: 1|\" config.yaml && \
+             sed -i \"s|batch_idx:.*|batch_idx: \\\"2500\\\"|\" config.yaml && \
+             sed -i \"s|logs_on_console:.*|logs_on_console: True|\" config.yaml && \
+             sed -i \"s|verbose:.*|verbose: info|\" config.yaml && \
+             sed -i \"s|overwrite_outputs:.*|overwrite_outputs: False|\" config.yaml && \
              echo '=== Modified config.yaml ===' && \
              cat config.yaml && \
              echo '===Activating conda environment and running Snakemake=== ' && \
