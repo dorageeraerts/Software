@@ -1,0 +1,50 @@
+Bootstrap: docker
+From: condaforge/miniforge3:latest
+
+%environment
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+
+    export CONDA_DEFAULT_ENV=muraves
+    export CONDA_PREFIX=/opt/conda/envs/muraves
+    export PATH=/opt/conda/envs/muraves/bin:$PATH
+
+%files
+    ../../pyproject.toml /opt/muraves_lib/pyproject.toml
+    ../../muraves_lib /opt/muraves_lib/muraves_lib
+
+
+%post
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+
+    # Create conda env
+    mamba create -n muraves -y -c conda-forge -c bioconda \
+        python=3.11 \
+        root \
+        iminuit \
+        uv \
+        pandas \
+        polars \
+        numpy \
+        scipy \
+        matplotlib \
+        jupyter \
+        zfit \
+        snakemake \
+        uproot && \
+        mamba clean -afy
+
+    # Install git
+    apt-get update && \
+        apt-get install -y git && \
+        rm -rf /var/lib/apt/lists/*
+
+    # Install muraves_lib inside the environment
+    cd /opt/muraves_lib
+    /opt/conda/envs/muraves/bin/python -m pip install -e .
+
+    mkdir -p /workspace
+
+%runscript
+    exec "$@"

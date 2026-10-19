@@ -3,4 +3,4 @@
 #package Muraves
 #when to update: Update this number if the new tag requires the data samples to be reprocessed.
 #info: this number correspond to the major index of the Git tag
-version: v0
+version: v1

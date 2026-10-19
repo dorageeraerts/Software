@@ -1,176 +1,158 @@
-from ROOT  import TFile
-from ROOT import TTree
-from array import array
 import argparse as argp
-import functools
 import logging
+from muraves_lib import file_handler
+from pathlib import Path
 
-Description = ' This code takes as input the data from ADC and unpacks them to obtain a track collection '
-parser = argp.ArgumentParser(description = Description)
-parser.add_argument('-data', '--ADCfile', type = open, required = True, help = 'This file cointains data taken by ADCs')
-parser.add_argument('-r','--run', required=True, help = 'run number')
-parser.add_argument('-type','--ADCorPED',required=True)
-parser.add_argument("-info", "--info_board", dest="info_board", nargs="+", required=True,
-                    help="Input nBoards, nInfoBoard and nChannels integer values")
-parser.add_argument("-o", "--output_filename", dest="output_filename", required=True,
-                    help="Name of the output")
-args = parser.parse_args()
-runnumber = str(args.run)
-fileADC = args.ADCfile
-datalines = fileADC.readlines()
-isADCorPED= args.ADCorPED
-nBoards = int(args.info_board[0])
-nInfoBoard = int(args.info_board[1])
-nChannels= int(args.info_board[2])
-output_filename = args.output_filename
+import uproot
+import numpy as np
 
-####################################################### Reading File ################################################# 
-def Board(n,data):
-    board = {}
-    board['trigger'] = int(data[n*nInfoBoard + 1])
-    board['boardNumber'] = int(data[n*nInfoBoard +2])
-    board['timeStamp'] = int(data[n*nInfoBoard+35])
-    board['temperature'] = int(data[n*nInfoBoard+36])
-    board['timeExp'] = int(data[n*nInfoBoard+37])
-    board['parity'] = int(data[n*nInfoBoard+38])
-    board['FastOr'] = data[n*nInfoBoard+39]
-    channels = []
-    for nCh in range(nChannels):
-        channels.append(int(data[3+n*nInfoBoard + nCh]))
-    board['channels'] = channels
-    return board
-
-def Event(ADCline):
-    data  = ADCline.split()
-    # The 'Event' container contains nBoards dictionaries, one for each board, and describes a single event
-    # (a single line in the ADC file)                                                                                                                                                                                                    
-    Event = [] #list of dictionaries; each dictionary is a board                                                                                                                                                        
-    Event = list(map(functools.partial(Board,data=data),range(nBoards)))
-    return Event
-
-Events = list(map(Event,datalines))
-args.ADCfile.close()
-
-###########################################################################################################################
-
-################ Make the Tree #####################
+from multiprocessing import Pool
+logger = logging.getLogger(__name__)
 
 
-#filePED =  TFile("/media/muraves2/CILINDRO/PREANALYZED/"+isADCorPED+"_CILINDRO_run_"+str(runnumber)+".root","recreate")
-#filePED =  TFile("/media/muraves3/CILINDRO/IAEA/PREANALYZED/WP_100Hz/"+isADCorPED+"_CILINDRO_run_"+str(runnumber)+".root","recreate")
-#filePED =  TFile("/media/muraves3/CILINDRO/IAEA/PREANALYZED/FREESKY_NUC/"+isADCorPED+"_CILINDRO_run_"+str(runnumber)+".root","recreate")
-filePED =  TFile(output_filename,"recreate")
-tree = TTree("Tree","Tree")
+def parse_strips(strip_str):
+    """Convertit une chaîne comme '_15_14_' en liste d'entiers [15, 14]."""
+    if strip_str.startswith('_') and strip_str.endswith('_'):
+        return [int(x) for x in strip_str[1:-1].split('_') if x]
+    return []
 
-temperature = array('i', [0])
-scheda =array('i',[0]) 
-adc_0 = array('i',[0])
-adc_1 = array('i',[0])
-adc_2 = array('i',[0])
-adc_3 = array('i',[0])
-adc_4 = array('i',[0])
-adc_5 = array('i',[0])
-adc_6 = array('i',[0])
-adc_7 = array('i',[0])
-adc_8 = array('i',[0])
-adc_9 = array('i',[0])
-adc_10 = array('i',[0])
-adc_11 = array('i',[0])
-adc_12 = array('i',[0])
-adc_13 = array('i',[0])
-adc_14 = array('i',[0])
-adc_15 = array('i',[0])
-adc_16 = array('i',[0])
-adc_17 = array('i',[0])
-adc_18 = array('i',[0])
-adc_19 = array('i',[0])
-adc_20 = array('i',[0])
-adc_21 = array('i',[0])
-adc_22 = array('i',[0])
-adc_23 = array('i',[0])
-adc_24 = array('i',[0])
-adc_25 = array('i',[0])
-adc_26 = array('i',[0])
-adc_27 = array('i',[0])
-adc_28 = array('i',[0])
-adc_29 = array('i',[0])
-adc_30 = array('i',[0])
-adc_31 = array('i',[0])
+def parse_adc_line(line, nBoards, nInfoBoard, nChannels):
+    """Parse une ligne ADC en extrayant strips et canaux."""
+    data = line.split()
+    boards = []
+    for n in range(nBoards):
+        start = n * nInfoBoard
+        try:
+            board = {
+                "boardNumber": int(data[start + 2]),
+                "temperature": int(data[start + 36]),
+                "channels": [int(x) for x in data[start + 3 : start + 3 + nChannels]],
+                "strips": parse_strips(data[start + 39])  # Champ FastOr $ex: '_15_14_'$
+            }
+            boards.append(board)
+        except (IndexError, ValueError):
+            continue  # Ignore les boards incomplets/malformés
+    return boards
 
-tree.Branch("scheda",scheda,"scheda/I")
-tree.Branch("temperature", temperature, "temperature/I")
-tree.Branch("adc_0",adc_0,"adc_0/I")
-tree.Branch("adc_1",adc_1,"adc_1/I")
-tree.Branch("adc_2",adc_2,"adc_2/I")
-tree.Branch("adc_3",adc_3,"adc_3/I")
-tree.Branch("adc_4",adc_4,"adc_4/I")
-tree.Branch("adc_5",adc_5,"adc_5/I")
-tree.Branch("adc_6",adc_6,"adc_6/I")
-tree.Branch("adc_7",adc_7,"adc_7/I")
-tree.Branch("adc_8",adc_8,"adc_8/I")
-tree.Branch("adc_9",adc_9,"adc_9/I")
-tree.Branch("adc_10",adc_10,"adc_10/I")
-tree.Branch("adc_11",adc_11,"adc_11/I")
-tree.Branch("adc_12",adc_12,"adc_12/I")
-tree.Branch("adc_13",adc_13,"adc_13/I")
-tree.Branch("adc_14",adc_14,"adc_14/I")
-tree.Branch("adc_15",adc_15,"adc_15/I")
-tree.Branch("adc_16",adc_16,"adc_16/I")
-tree.Branch("adc_17",adc_17,"adc_17/I")
-tree.Branch("adc_18",adc_18,"adc_18/I")
-tree.Branch("adc_19",adc_19,"adc_19/I")
-tree.Branch("adc_20",adc_20,"adc_20/I")
-tree.Branch("adc_21",adc_21,"adc_21/I")
-tree.Branch("adc_22",adc_22,"adc_22/I")
-tree.Branch("adc_23",adc_23,"adc_23/I")
-tree.Branch("adc_24",adc_24,"adc_24/I")
-tree.Branch("adc_25",adc_25,"adc_25/I")
-tree.Branch("adc_26",adc_26,"adc_26/I")
-tree.Branch("adc_27",adc_27,"adc_27/I")
-tree.Branch("adc_28",adc_28,"adc_28/I")
-tree.Branch("adc_29",adc_29,"adc_29/I")
-tree.Branch("adc_30",adc_30,"adc_30/I")
-tree.Branch("adc_31",adc_31,"adc_31/I")
+def make_tree(output_filename, datalines, nBoards, nInfoBoard, nChannels):
+    """Crée un TTree avec uproot, incluant les strips déclenchés."""
+    total_entries = len(datalines) * nBoards
+    scheda = np.empty(total_entries, dtype=np.int32)
+    temperature = np.empty_like(scheda)
+    channels = np.empty((total_entries, nChannels), dtype=np.int32)
+    strips = []  # Liste de listes (non vectorisable directement)
+
+    idx = 0
+    for line in datalines:
+        boards = parse_adc_line(line, nBoards, nInfoBoard, nChannels)
+        for board in boards:
+            scheda[idx] = board["boardNumber"]
+            temperature[idx] = board["temperature"]
+            channels[idx] = board["channels"]
+            strips.append(board["strips"])  # Stocke la liste des strips
+            idx += 1
+
+    # Redimensionne les tableaux
+    scheda = scheda[:idx]
+    temperature = temperature[:idx]
+    channels = channels[:idx]
+
+    # Convertit les strips en tableau de type "object" pour uproot
+    strips_array = np.empty(len(strips), dtype=object)
+    strips_array[:] = strips
+
+    with uproot.recreate(output_filename) as f:
+        f.mktree('Tree', {
+            "scheda": scheda,
+            "temperature": temperature,
+            **{f"adc_{i}": channels[:, i] for i in range(nChannels)},
+            "strips": strips_array  # Champ supplémentaire pour les strips
+        })
+    
 
 
 
-for  ev in Events:
-    for board in range(nBoards):
-        temperature[0] = int(ev[board]["temperature"])
-        scheda[0] = int(ev[board]['boardNumber'])
-        adc_0[0]= ev[board]['channels'][0]
-        adc_1[0] = ev[board]['channels'][1]
-        adc_2[0] = ev[board]['channels'][2]
-        adc_3[0] = ev[board]['channels'][3]
-        adc_4[0] = ev[board]['channels'][4]
-        adc_5[0] = ev[board]['channels'][5]
-        adc_6[0] = ev[board]['channels'][6]
-        adc_7[0] = ev[board]['channels'][7]
-        adc_8[0] = ev[board]['channels'][8]
-        adc_9[0] = ev[board]['channels'][9]
-        adc_10[0] = ev[board]['channels'][10]
-        adc_11[0] = ev[board]['channels'][11]
-        adc_12[0] = ev[board]['channels'][12]
-        adc_13[0] = ev[board]['channels'][13]
-        adc_14[0] = ev[board]['channels'][14]
-        adc_15[0] = ev[board]['channels'][15]
-        adc_16[0] = ev[board]['channels'][16]
-        adc_17[0] = ev[board]['channels'][17]
-        adc_18[0] = ev[board]['channels'][18]
-        adc_19[0] = ev[board]['channels'][19]
-        adc_20[0] = ev[board]['channels'][20]
-        adc_21[0] = ev[board]['channels'][21]
-        adc_22[0] = ev[board]['channels'][22]
-        adc_23[0] = ev[board]['channels'][23]
-        adc_24[0] = ev[board]['channels'][24]
-        adc_25[0] = ev[board]['channels'][25]
-        adc_26[0] = ev[board]['channels'][26]
-        adc_27[0] = ev[board]['channels'][27]
-        adc_28[0] = ev[board]['channels'][28]
-        adc_29[0] = ev[board]['channels'][29]
-        adc_30[0] = ev[board]['channels'][30]
-        adc_31[0] = ev[board]['channels'][31]
 
-        tree.Fill()
-tree.Write()
-filePED.Close()
+if __name__ == "__main__":
+
+    Description = ' This code takes as input the data from ADC and unpacks them to obtain a track collection '
+    parser = argp.ArgumentParser(description = Description)
+    parser.add_argument('-i', '--input_filename', dest="input_filename", required = True, help = 'This files contains the list of ADC files.')
+    parser.add_argument("-l", "--log_on_console", dest="log_on_console", required=True,
+                        help="If true logs are printed on terminal, if False they are printed on a file.")
+    parser.add_argument("-ow", "--overwrite_outputs", dest="overwrite_outputs", required=True, 
+                        help="If true, existing output files will be overwritten. If False, existing output files will be kept and the corresponding runs will be skipped.")
+    parser.add_argument("-v", "--verbose", dest="verbose", required=False, default="info",
+                        help="Logging level: debug/info/warning/error/critical (default = info)")
+    parser.add_argument("-th", "--num_threads", dest="num_threads", type=int, default=1,
+                        help="Number of threads/cores to use for processing (default = 1)")
+    parser.add_argument("-info", "--info_board", dest="info_board", nargs="+", required=True,
+                        help="Input nBoards, nInfoBoard and nChannels integer values")
+    parser.add_argument("-o", "--output_filename", dest="output_filename", required=True,
+                        help="Name of the output")
+    args = parser.parse_args()
+    
+    input_filename = args.input_filename
+    nBoards = int(args.info_board[0])
+    nInfoBoard = int(args.info_board[1])
+    nChannels= int(args.info_board[2])
+    output_filename = args.output_filename
+    batch_idx = int(args.output_filename.split("_batch")[-1].split(".")[0])
+    overwrite_outputs = args.overwrite_outputs
+
+    # setup logging per batch
+    if args.log_on_console == 'True':
+        logging.basicConfig(
+            level=getattr(logging, args.verbose.upper()),
+            format="%(asctime)s [%(levelname)s] %(message)s"
+        )
+    else:
+        log_file = "logs/PRERECONSTRUCTED/" + Path(args.output_filename).with_suffix(".log").name
+        Path(log_file).parent.mkdir(parents=True, exist_ok=True)
+        open(log_file, "w").close()
+        logging.basicConfig(
+            filename=log_file,
+            level=getattr(logging, args.verbose.upper()),
+            format="%(asctime)s [%(levelname)s] %(message)s"
+        )
+
+
+    with open(input_filename, "r") as f_input:
+        file_list = [line.strip() for line in f_input]
+
+    def process_run(parsed_file):
+        output_filename_per_run = Path(parsed_file.replace("PARSED", "PRERECONSTRUCTED").replace(".txt", ".root"))
+        runnumber = str(output_filename_per_run.stem).split("run")[-1]
+        datalines = []
+        if overwrite_outputs == 'False' and output_filename_per_run.exists():
+            logger.info(f"Output file {output_filename_per_run} already exists and overwrite_outputs is set to False. Skipping run.")
+        elif overwrite_outputs == 'True' or not output_filename_per_run.exists():
+            logger.info(f"Processing run {runnumber}...")
+            try:
+                with open(parsed_file, "r") as f_parsed:
+                    datalines = f_parsed.read().splitlines()
+            except:
+                logger.error("File do not exist! It should always exist as the parsing stage. If it doesn't probably there was an error while parsing this batch of runs. ")          
+            if len(datalines)==0:
+                logger.info(f"Parsed file {parsed_file} is empty. Parsing failed or the run is missing. Creating an empty ouput for snakemake.")
+                with file_handler.temp_to_output(output_filename_per_run) as tmp_path: 
+                    pass
+            else:
+                with file_handler.temp_to_output(output_filename_per_run) as tmp_path:           
+                    make_tree(tmp_path, datalines, nBoards, nInfoBoard, nChannels)
+        return output_filename_per_run, runnumber
+    
+
+    results = Pool(args.num_threads).map(process_run, file_list)
+    output_filename_per_run_list, run_list = zip(*results)
+        
+
+    with file_handler.temp_to_output(args.output_filename) as tmp:
+        with open(tmp, "a") as f:
+            for filename in output_filename_per_run_list:
+                f.write(f"{filename}\n")
+    print(f'Batch {batch_idx} completato con {args.num_threads} thread. \nRuns: {run_list}')
+    #print(f"time of writing: {round(end_time - start_time, 2)}")
+    
+
+

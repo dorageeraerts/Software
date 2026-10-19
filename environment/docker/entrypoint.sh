@@ -34,7 +34,7 @@ if [ -d "/workspace/Software" ]; then
     cd /workspace/Software
     python -m pip install -e . --quiet
 fi
-
+pip install -U scikit-learn --quiet
 #------------------------------------------------
 # Check if /workspace is empty or not a git repo
 #------------------------------------------------
@@ -51,6 +51,11 @@ fi
 # Open interactive shell with muraves conda environment: 
 # ---------------------------------------------------------
 echo "[INFO] Container ready. Starting shell..."
-exec bash --init-file <(echo "source /opt/conda/etc/profile.d/conda.sh && conda activate muraves")
+if [ $# -gt 0 ]; then
+    source /opt/conda/etc/profile.d/conda.sh && conda activate muraves
+    exec "$@"
+else
+    exec bash --init-file <(echo "source /opt/conda/etc/profile.d/conda.sh && conda activate muraves")
+fi
 
 

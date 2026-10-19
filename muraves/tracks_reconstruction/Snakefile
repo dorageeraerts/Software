@@ -1,11 +1,11 @@
 configfile: 'config.yaml'
 configfile: '../../tag/requirements.yaml'
-
-data_path = config['data_path']
-
+import os
+import multiprocessing
+#from muraves_lib import snakefile_helper
 # IMPROVEMENTS:
 # The number of boards and channel should go in another configuration file
-
+# ******************** Funzioni helper  ********************
 #Function to convert runs of config file to list of runs
 def parse_runs(run_str):
     runs = []
@@ -22,89 +22,216 @@ def parse_runs(run_str):
         runs.append(run_str)
     
     return [str(r) for r in runs] 
-runs = parse_runs(config['run']) # convert config file format into list of runs.
+
+def batch_runs(runs, n=5):
+    """Split list of runs into chunks of size n"""
+    for i in range(0, len(runs), n):
+        yield runs[i:i+n]
+
+def parse_batch_indices(batch_string):
+    batch_list = []
+    parts = batch_string.split(',')
+
+    for part in parts:
+        part = part.strip()
+        if '-' in part:
+            start, end = map(int, part.split('-'))
+            batch_list.extend(range(start, end + 1))
+        else:
+            batch_list.append(int(part))
+
+    return sorted(set(batch_list))  # Rimuove duplicati e ordina
+
+
+#>>>>>~~~~~~~~~~~~~~~~~~ GLOBAL PARAMETERS  ~~~~~~~~~~~~~~~~~~~
+PNFS = config['data_path']
+HOME = os.path.expandvars('/user/dgeeraer/MURAVES/output_track_reconstruction')
+BATCH_SIZE = config['batch_size'] 
+THREADS = config['threads']
+EXEC_CFG = config.get('execution_config', {})
+RECO_PARAMETERS_FILE = EXEC_CFG.get('reco_parameters_file', 'muraves_cfg_files/reco_parameters.json')
+RECO_OVERRIDE_FILE = EXEC_CFG.get('reco_override_file', '')
+SPIROC_MAPPING_FILE = EXEC_CFG.get('spiroc_mapping_file', 'muraves_cfg_files/spiroc-hybrid-map.cfg')
+TELESCOPE_CFG_TEMPLATE = EXEC_CFG.get('telescope_cfg_template', 'muraves_cfg_files/telescope{color}.cfg')
+PEDESTAL_BENCHMARK_TEMPLATE = EXEC_CFG.get('pedestal_benchmark_template', 'muraves_cfg_files/pedestal_1phe_values/{color}_PED_BANCHMARK')
+SELECTED_RECO_CONFIG = RECO_OVERRIDE_FILE if RECO_OVERRIDE_FILE else RECO_PARAMETERS_FILE
+CLUSTER_SMEARING_SEED = config.get('cluster_smearing_seed', None)
+SLOW_CONTROL_PREFIX = config.get('slow_control_prefix', 'SLOWCONTROL_run')
+if config['run']:
+    runs = parse_runs(config['run'])  # convert config file format into list of runs.
+    BATCHES = list(batch_runs(runs, BATCH_SIZE))  # # create batches: [[2500,2501,2502], [2503,2504,2505], ...]
+    BATCH_IDX = range(len(BATCHES))
+else:
+    BATCH_IDX = parse_batch_indices(config['batch_idx'])
+overwrite_outputs=config['overwrite_outputs'],
+log_on_console=config['logs_on_console'],
+verbose=config['verbose'],
+#<<<<<~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 localrules: all
 
-# Rule that tells the list of final outputs that must be produced by the flow
 rule all:
     input:
         expand(
-        '{path}/RECONSTRUCTED/{color}/{version}/MURAVES_AnalyzedData_run{run}.root',
-            path=config['output_path'],
+            '{output_path}/RECONSTRUCTED/{color}/{version}/MURAVES_AnalyzedData_batch{batch_idx}.stamp',
+            output_path=PNFS if config.get('copy_to_data') else HOME,
             color=config['hodoscope'],
-            version = config['version'],
-            type=config['type'],
-            run=runs
-        )  
-
-  
-rule parse:
-    input: 
-        script='1_Parser/prep.py',
-    params:
-        #rawfile_path = '{path}/RAW_GZ/{color}',
-        optional_input_files = [f'{data_path}/RAW_GZ/{{color}}/SLOWCONTROL_run{{run}}.gz',
-                                f'{data_path}/RAW_GZ/{{color}}/LOG_run{{run}}.gz', 
-                                f'{data_path}/RAW_GZ/{{color}}/CONTEGGI_run{{run}}.gz'
-                                ]
-
-    output:
-        output_filename = '{path}/PARSED/{color}/{version}/{type}_run{run}.txt',
-        status_file = '{path}/PARSED/{color}/{version}/{type}_run{run}.json',
-        #log_file = '{path}/PARSED/{color}/{version}/{type}_run{run}.log'
-    shell: "python {input.script} -i {params.optional_input_files} -t {wildcards.type} -r {wildcards.run} -o {output.output_filename} -l {{config['log_on_console']}} -j {output.status_file}"
-
-
-
-rule prereco:
-    input:
-        script = '2_PreRec/MakePedestalTree.py',
-        file = '{path}/PARSED/{color}/{version}/{type}_run{run}.txt'
-    params:
-        nBoards = 16,
-        nInfoBoard = 39,
-        nChannels= 32
-    output:
-        output_filename = '{path}/PRERECONSTRUCTED/{color}/{version}/{type}_run{run}.root'
-    shell: "python {input.script} -data {input.file} -r {wildcards.run} -type {wildcards.type} -info {params.nBoards} {params.nInfoBoard} {params.nChannels} -o {output.output_filename}"
-
-
-
-rule pedestal_analysis:
-    input:
-        script = '3_PedAna/OnePhE_evaluator.py',
-        file = '{path}/PRERECONSTRUCTED/{color}/{version}/PIEDISTALLI_run{run}.root'
-    #params: # to be removed at next version
-    #    number_of_runs = 1
-    #    delta_around_central_runID = 0
-    output:
-        expand(
-            "{{path}}/PEDESTAL/{{color}}/{{version}}/{{run}}/pedestal_{n}.cfg", n = range(16)
+            version=config['version'],
+            #type=config['type'], 
+            ## NB: this isn't needed anymore if 'rule all' want's to produce output of pedestal rule or analysis rule, as in this case the dependance is explicit.
+            batch_idx=BATCH_IDX
         )
-    shell: "python {input.script} -data {input.file} -r {wildcards.run} -o {output}"
 
+
+rule parse_batch:
+    threads: THREADS
+    container: '/user/abiolchi/muraves-sing.sif'
+    input:
+        script="1_Parser/prep.py"
+    params:
+        raw_data_path=f'{PNFS}/RAW_GZ/{{color}}',
+        runs=lambda wildcards:
+            ( BATCHES[int(wildcards.batch_idx)] if config.get('run')
+                else list(range(int(wildcards.batch_idx) * BATCH_SIZE, int(wildcards.batch_idx) * BATCH_SIZE + BATCH_SIZE))
+            ),  
+    output:
+        output_filename="{output_path}/PARSED/{color}/{version}/{type}_batch{batch_idx}.stamp" #Questo output contiene la lista dei file prodotti dal batch, che saranno usati come input per le regole successive.
+    shell:
+        "python {input.script} -i {params.raw_data_path} -th {threads} -t {wildcards.type} -r {params.runs} -o {output.output_filename} -l {log_on_console} -v {verbose} -ow {overwrite_outputs}"
+
+# Alice: with the new pedestal reader these two steps are not needed anymore
+#rule prereco:
+#    threads: THREADS
+#    container: '/user/abiolchi/muraves-sing.sif'
+#    input:
+#        script = '2_PreRec/MakePedestalTree.py',
+#        input_filename = "{output_path}/PARSED/{color}/{version}/{type}_batch{batch_idx}.stamp"
+#    params:
+#        nBoards = 16,
+#        nInfoBoard = 39,
+#        nChannels= 32
+#    output:
+#        output_filename = "{output_path}/PRERECONSTRUCTED/{color}/{version}/{type}_batch{batch_idx}.stamp"
+#    shell: "python {input.script} -i {input.input_filename} -info {params.nBoards} {params.nInfoBoard} {params.nChannels} -o {output.output_filename} -th {threads} -l {log_on_console} -v {verbose} -ow {overwrite_outputs}"
+#
+#
+#
+#rule pedestal_analysis:
+#    threads: THREADS
+#    container: '/user/abiolchi/muraves-sing.sif'
+#    input:
+#        script = '3_PedAna/OnePhE_evaluator.py',
+#        input_filename = '{output_path}/PRERECONSTRUCTED/{color}/{version}/PIEDISTALLI_batch{batch_idx}.stamp'
+#    params: # to be removed at next version
+#        nBoards = 16,
+#        nInfoBoard = 39,
+#        nChannels= 32,
+#        overwrite_outputs = "True"
+#
+#    #    number_of_runs = 1
+#    #    delta_around_central_runID = 0
+#    output:
+#        output_filename = "{output_path}/PEDESTAL/{color}/{version}/PIEDISTALLI_batch{batch_idx}.stamp",
+#        #sub_files = 
+#        #expand(
+#        #    "{{output_path}}/PEDESTAL/{{color}}/{{version}}/{run}/pedestal_{n}.cfg", run = lambda wildcards:
+#        #    ( BATCHES[int(wildcards.batch_idx)] if config.get('run')
+#        #        else list(range(int(batch_idx) * BATCH_SIZE, int(wildcards.batch_idx) * BATCH_SIZE + BATCH_SIZE))
+#        #    ),   n = range(16)
+#        #) ##NB: CONS--> these subruns will remain silents, the success has to be checks through logs 
+#    shell: "python {input.script} -i {input.input_filename} -info {params.nBoards} {params.nInfoBoard} {params.nChannels} -o {output.output_filename} -th {threads} -l {log_on_console} -v {verbose} -ow {params.overwrite_outputs}"
+
+
+
+# Telescope-level 1phe calibration: all runs of a telescope share the same pedestal_N files,
+# derived once from the benchmark ped_onephe_sk*.txt files shipped with the repo.
+# This replaces the per-run `pedestal_analysis` rule in the reconstruction chain, so runs
+# no longer need the PIEDISTALLI parse/prereco/pedestal_analysis steps.
+rule pedestal_reader:
+    container: '/user/abiolchi/muraves-sing.sif'
+    input:
+        script = '3_PedAna/PedestalReader.py',
+        benchmark_files = lambda wildcards: expand(
+            PEDESTAL_BENCHMARK_TEMPLATE.format(color=wildcards.color) + '/ped_onephe_sk{n}.txt',
+            n=range(1, 17)
+        )
+    params:
+        benchmark_dir = lambda wildcards: PEDESTAL_BENCHMARK_TEMPLATE.format(color=wildcards.color),
+        output_base = lambda wildcards: f'{wildcards.output_path}/PEDESTAL/{wildcards.color}/{wildcards.version}',
+        nBoards = 16,
+        nChannels = 32
+    output:
+        stamp = '{output_path}/PEDESTAL/{color}/{version}/PEDESTAL_BENCHMARK_{color}.stamp',
+        pedestal_files = expand(
+            '{{output_path}}/PEDESTAL/{{color}}/{{version}}/{{color}}/pedestal_{n}', n=range(16)
+        )
+    shell:
+        "python {input.script} "
+        "--input-dir {params.benchmark_dir} "
+        "--output-dir {params.output_base} "
+        "--telescope {wildcards.color} "
+        "--num-boards {params.nBoards} "
+        "--num-channels {params.nChannels} "
+        "--stamp-file {output.stamp}"
 
 
 rule analyse:
+    threads: THREADS
+    container: '/user/abiolchi/muraves-sing.sif'
     input:
-        main_script = "4_MainRecSof/MURAVES_reco_v02-01.cpp", # make sure that scriptname is correct
-        script_1 = "4_MainRecSof/ClusterLists.cc",
-        script_2 =  "4_MainRecSof/EvaluateAngularCoordinates.cc",
-        script_3 = "4_MainRecSof/ReadEvent.cc",
-        script_4 = "4_MainRecSof/Tracking.cc",
-        data_file = '{path}/PRERECONSTRUCTED/{color}/{version}/ADC_run{run}.root',
-        one_phe_files = lambda wildcards: [
-            f"{wildcards.path}/PEDESTAL/{wildcards.color}/{wildcards.version}/{wildcards.run}/pedestal_{n}.cfg"
-            for n in range(16)
-        ]
-
+        script = "4_MainRecSof/MURAVES_reco.py",
+        data_file = '{output_path}/PARSED/{color}/{version}/ADC_batch{batch_idx}.stamp',
+        one_phe_files = "{output_path}/PEDESTAL/{color}/{version}/PEDESTAL_BENCHMARK_{color}.stamp",
+        reco_parameters = RECO_PARAMETERS_FILE,
+        spiroc_mapping = SPIROC_MAPPING_FILE,
+        telescope_cfg = lambda wildcards: TELESCOPE_CFG_TEMPLATE.format(color=wildcards.color)
     output:
-        output_filename = '{path}/RECONSTRUCTED/{color}/{version}/MURAVES_AnalyzedData_run{run}.root',
-    shell: "g++ -std=c++20 {input.script_4} {input.script_3} {input.script_2} {input.script_1} {input.main_script} "
-           "-o 4_MainRecSof/MURAVES_reco_v02-01.exe " # make sure that scriptname is correct
-           "$(root-config --cflags --libs) -lSpectrum "
-           "-I/opt/conda/envs/muraves/include/python3.11 "
-            "-L/opt/conda/envs/muraves/lib -lpython3.11 &&"
-            "./4_MainRecSof/MURAVES_reco_v02-01.exe {wildcards.color} {wildcards.run} {wildcards.run}" # make sure that scriptname is correct
+        output_filename = '{output_path}/RECONSTRUCTED/{color}/{version}/MURAVES_AnalyzedData_batch{batch_idx}.stamp',
+    params:
+        raw_base = f'{PNFS}/RAW_GZ',
+        tracks_base = '.',
+        pedestal_folder = lambda wildcards: f'{wildcards.output_path}/PEDESTAL/{wildcards.color}/{wildcards.version}/{wildcards.color}',
+        reco_config_file = SELECTED_RECO_CONFIG,
+        slow_control_prefix = SLOW_CONTROL_PREFIX,
+        cluster_smearing_seed_arg = (
+            f'--cluster-smearing-seed {CLUSTER_SMEARING_SEED}'
+            if CLUSTER_SMEARING_SEED is not None
+            else ''
+        ),
+    shell:
+        "python {input.script} {wildcards.color} "
+        "-i {input.data_file} "
+        "--pedestal-folder {params.pedestal_folder} "
+        "-o {output.output_filename} "
+        "--raw-base {params.raw_base} "
+        "--tracks-base {params.tracks_base} "
+        "--slow-control-prefix {params.slow_control_prefix} "
+        "--spiroc-mapping-file {input.spiroc_mapping} "
+        "--telescope-config-file {input.telescope_cfg} "
+        "--base-config {input.reco_parameters} "
+        "--config {params.reco_config_file} "
+        "{params.cluster_smearing_seed_arg} "
+        "--write-root "
+        "-th {threads} "
+        "-l {log_on_console} "
+        "-v {verbose} "
+        "-ow {overwrite_outputs}"
+
+
+
+
+# Not used anymore
+#rule stageout:
+#    input:
+#        lambda wildcards: os.path.join(SCRATCH, wildcards.subpath)
+#    output:
+#        os.path.join(PNFS, "{subpath}")
+#    shell:
+#        """
+#        rsync -av {input} {output} &&
+#        rm {input}
+#        """
+
+
+
 

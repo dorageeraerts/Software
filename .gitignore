@@ -5,6 +5,11 @@
 # Ignore all PDF files
 *.pdf
 
+#Ignore plots
+*.png
+*.jpg
+*.jpeg
+
 
 # Compiled source #
 ###################
@@ -65,6 +70,9 @@ build/
 ############
 *.pkl
 *.csv
+!test_data/**
+*.json
+*.root
 
 # snakemake #
 ################

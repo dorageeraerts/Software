@@ -1,13 +1,54 @@
 ! Responsible : Alice Biolchini
 ! Purpose     : Tag the version of the workflow for MuRaVes trak reconstruction and run monitoring
 ! Legend      : `vX.n.k` (version), X changes when major modifications are made that require re-processing of data.
-!                                       *e.g.* Change algorithm, new/change clustering/tracking requirement, new/change chi2 selection, ...                          
+!                                       *e.g.* CHANGES THAT AFFECT OUTPUTS Change algorithm, new/change clustering/tracking requirement, new/change chi2 selection, ...
+!
 !                                   n changes for intermediate modifications; substantial updates, but output data remain compatible with previous version.
-!                                       *e.g.* Change of python pakage, update of snakemake version, necessity to update container or environment.
-!                                   k changes for small bug fixes or documentation updates.     
+!                                       *e.g* SUBSTANTIAL CHANGES THAT DO NOT AFFECT THE OUTPUTS, most of the releases fall here.
+!
+!                                   k changes for small bug fixes or documentation updates.   
+!                                        *e.g.* SMALL CHANGES THAT DO NOT AFFECT THE OUTPUTS: python pakage, update of snakemake version, necessity to update container or environment.
 ! Date        : yyyy-mm-dd           
 !-----------------------------------------------------------------------------
 
+!================ Workflow tag v0.5.0-last-old-1phe-values 2026-08-20 ==================================
+|Description:
+|  - Additional variable: flipped phi. This variable is suppose to be the correct, that matching the phi angle defined in the simulation. See DORA's presentation: https://agenda.infn.it/event/53139/contributions/303420/attachments/153876/236248/20260728_MuravesMeeting.pdf
+|  - Some variables of the tree produced by the pythonised version of the reconstruction script are now trimmed because there were simply repeated multiple times. More info in tag relese.
+
+
+!================ Workflow tag v0.4.0 2026-06-16 ==================================
+|Description:
+|  - Export hardcoded parameter into configuration files and reorganisation in https://github.com/muraves/Software/pull/9
+|  - Introduced pipeline for workflow validation at pull requests https://github.com/muraves/Software/pull/7
+|  - Logic fix in https://github.com/muraves/Software/pull/8
+|Release:
+| https://github.com/muraves/Software/releases/tag/v0.4.0
+
+!================ Workflow tag v0.3.0 2026-04-14 ==================================
+|Description:
+|  - Workflow accomodates processing in batches of runs (essential to optimize job submission)
+|  - Pythonisation of reconstruction script
+|Release:
+| https://github.com/muraves/Software/releases/tag/v0.3.0
+
+**ERRATA:**
+Versions below 0.3.0 are affected by two bugs:
+  - ClusterLists.cc​, the variable ClusterStripsID​ is not cleared like the others, so the scripts misses a line clusterStripsID.clear(); 
+    (see here: https://github.com/muraves/Software/blob/04c1b53684b718be08842bb740d3f1cbaca9729a/muraves/tracks_reconstruction/4_MainRecSof/ClusterLists.cc#L186)
+    This led to a carry-over of stripsID between clusters.
+    ->'StripsID' are the only variables affected by this bug.
+  - Tracking.cc, there was a displacement_p4.clear() in the loop of 4p track reconstruction, that was resetting
+    the number during the process, with the effect of less entries at the end. 
+    (see: https://github.com/muraves/Software/blob/c7afe10709abe7292d2af363b363a26cef91fc2e/tracks_reconstruction/4_MainRecSof/Tracking.cc#L160)
+    ->'displacements' are the only variables affected by this bug.
+!================ Workflow tag v0.2.0 2026-03-10 ==================================
+|Description:
+|  *NB: Intermidiate version that do not allow to run full reconstruction chain in Snakemake!*
+|   - Workflow compatible with job submission and parallel executions - *up to parsing*:
+|     - Snakemake parallelisation + Python multiprocessing
+|Release:
+|https://github.com/muraves/Software/releases/tag/v0.2.0
 
 !================ Workflow tag v0.1.0 2025-11-26 ==================================
 |Description:

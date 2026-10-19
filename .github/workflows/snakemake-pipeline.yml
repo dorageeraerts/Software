@@ -1,0 +1,80 @@
+name: Snakemake Pipeline
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+      - dev
+    paths:
+      - 'muraves/**'
+      - 'muraves_lib/**'
+  workflow_dispatch:
+    inputs:
+      run_label:
+        description: "Nome test run"
+        required: false
+        default: "manual-test"
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  
+jobs:
+  snakemake:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Enter Docker folder
+        run: cd environment/docker
+
+      - name: Build Docker image
+        working-directory: environment/docker
+        run: |
+          docker build -t muraves:latest .
+
+      - name: Run Snakemake workflow in container
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -v ${{ github.workspace }}/test_data:/data \
+            muraves:latest bash -c \
+            "cd muraves/tracks_reconstruction && \
+             python -m pip install --quiet pyyaml && \
+             python -c \"import yaml, pathlib; p=pathlib.Path('config.yaml'); c=yaml.safe_load(p.read_text()); c.update({'data_path':'/data','copy_to_data':False,'batch_size':1,'threads':1,'batch_idx':'2500','run':None,'logs_on_console':True,'verbose':'info','overwrite_outputs':False}); p.write_text(yaml.safe_dump(c, sort_keys=False))\" && \
+             echo '=== Modified config.yaml ===' && \
+             cat config.yaml && \
+             echo '===Activating conda environment and running Snakemake=== ' && \
+             source /opt/conda/etc/profile.d/conda.sh && conda activate muraves && \
+             echo '=== Environment diagnostics ===' && \
+             echo \"CONDA_DEFAULT_ENV=$CONDA_DEFAULT_ENV\" && \
+             echo \"CONDA_PREFIX=$CONDA_PREFIX\" && \
+             which python && \
+             python --version && \
+             python -m pip install --upgrade pip && \
+             python -m pip install -e /workspace && \
+             python -m pip install awkward-pandas && \
+             python -c \"import sys; print('PYTHON_EXE=', sys.executable)\" && \
+             python -c \"import muraves_lib; print('muraves_lib import OK')\" && \
+             echo '=== Starting Snakemake ===' && \
+             snakemake --cores 1 --printshellcmds --show-failed-logs 2>&1 | tee /tmp/snakemake.log && \
+             if grep -Eq '\\[ERROR\\]|Traceback' /tmp/snakemake.log; then \
+               echo 'Detected error patterns in Snakemake log.'; \
+               exit 1; \
+             fi && \
+             echo '=== Snakemake completed successfully ===' "
+
+      - name: Comment on failure
+        if: failure()
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "❌ Snakemake pipeline failed. Please check the error logs above."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

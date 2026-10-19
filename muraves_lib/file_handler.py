@@ -1,4 +1,4 @@
-__all__ = ['decompress', 'parse_slow_control', 'parse_log_file', 'parse_conteggi']
+__all__ = ['decompress', 'parse_slow_control', 'parse_log_file', 'parse_conteggi', 'temp_file_manager', 'copy_on_system', 'temp_to_output']
 
 import logging
 import os
@@ -7,6 +7,10 @@ import shutil
 import tempfile
 from pathlib import Path
 import json
+from contextlib import contextmanager
+import time
+
+logger = logging.getLogger(__name__)
 
 def read_run_info_from_json(filename, subdict='slowcontrol') -> dict:
     """
@@ -46,45 +50,51 @@ def read_run_info_from_json(filename, subdict='slowcontrol') -> dict:
         "accidental_rate": accidental_rate
     }
 
-def decompress(filename, destination_path = "/workspace/tmp/DECOMPRESSED/") -> str:
-    gz_path = Path(filename)
-    gz_filename = gz_path.stem # removes .gz extension
-    out_path_root = Path(destination_path)
-    os.makedirs(out_path_root, exist_ok=True)
-    out_filename = out_path_root / gz_filename
-    #out_path = str(out_filename.parent)
-    #os.makedirs(out_path, exist_ok=True)
+def _atomic_replace(src: Path, dst: Path, retries: int = 3, backoff: float = 0.1):
+    """Move *src* to *dst* atomically, retrying on transient failures.
 
-
-    ctrl = 0
-    if not gz_path.exists():
-        logging.error(f"{gz_path} does not exist.")   
-        ctrl=1     
-    if out_filename.exists():
-        logging.info(f"Uncompressed file {out_filename} already exists. Skipping.")
-        #sys.exit(0)
-        ctrl=1
-    err = None
-    if ctrl==0:
+    The source and destination **must live on the same filesystem**.  A
+    simple ``os.replace`` is used (it always overwrites the target) but
+    we wrap it in a retry loop so that a busy network filesystem has a
+    chance to recover when many clients are renaming concurrently.  A
+    directory lock can be added later if even retries are not enough.
+    """
+    for attempt in range(1, retries + 1):
         try:
-            # create temp file in the same directory to ensure atomic rename
-            with tempfile.NamedTemporaryFile(delete=False, dir=out_filename.parent) as tmp_file:
-                tmp_name = tmp_file.name
-                with gzip.open(gz_path, 'rb') as f_in:
-                    shutil.copyfileobj(f_in, tmp_file)
+            os.replace(src, dst)
+            return
+        except OSError as e:
+            if attempt == retries:
+                raise
+            time.sleep(backoff * attempt)
+        src.unlink(missing_ok=True)
+        raise RuntimeError(f"Failed to replace {src} with {dst} after {retries} attempts")
+
+
+def decompress(filename) -> str:
+
+    gz_path = Path(filename)
     
-            # atomic move to final destination
-            Path(tmp_name).rename(out_filename)
-            logging.debug(f"Successfully uncompressed {gz_path} → {out_filename}")
-        except Exception as e:
-            # if something goes wrong, remove the temp file
-            if 'tmp_name' in locals() and Path(tmp_name).exists():
-                Path(tmp_name).unlink()
-            err = f'Decompression failed'
-            logging.error(f"{err} for {gz_path}: {e}")
-            file_path = Path(out_filename)
-            file_path.touch(exist_ok=True)
-    return str(out_filename), err
+    if not gz_path.exists():
+        logger.error(f"{gz_path} does not exist.")   
+        return None, f"File not found: {gz_path}"
+
+    try:
+        # create temp file in the same directory to ensure atomic rename
+        with tempfile.NamedTemporaryFile(dir= "/tmp",delete=False) as tmp_file:
+            tmp_path = Path(tmp_file.name)
+            # copy decompressed content to temp file
+            with gzip.open(gz_path, 'rb') as f_in:
+                shutil.copyfileobj(f_in, tmp_file)
+        
+        return tmp_path, None
+    except Exception as e:
+        # if something goes wrong, remove the temp file
+        if tmp_path and tmp_path.exists():
+            tmp_path.unlink()
+
+        return None, f"Decompression failed for {gz_path}: {e}"
+
 
 
 def parse_slow_control(filename, target_run)-> dict:
@@ -103,28 +113,30 @@ def parse_slow_control(filename, target_run)-> dict:
     with open(filename, "r") as f:
 
         return_list = []
-        logging.debug("Parsing SLOWCONTROL file.")
+        logger.debug("Parsing SLOWCONTROL file.")
     
         for line in f:
             slowcontrol_dict = None
         #line = f.readline().strip()
             cols = line.strip().split("\t")
             # Check column count
-            if len(cols) < 44:
-                logging.warning(
-                    f"SLOWCONTROL file has only {len(cols)} columns, expected at least 44: {filename}"
-                )
-                #slowcontrol_dict =  None
-
+            sc_lenght_ctrl = 0
+            slowcontrol_lenght = len(cols)
+            if slowcontrol_lenght < 60:
+                sc_lenght_ctrl = 1
+                #logging.warning(
+                #    f"SLOWCONTROL file has only {len(cols)} columns, expected 60: {filename}"
+                #)
+            
             # Validate run number
             try:
                 run = int(float(cols[0]))
                 if run != target_run:
-                    logging.info(
+                    logger.info(
                     f"SLOWCONTROL file, expected run number mismatch: file has run {run}, expected {target_run}: {filename}"
                 )
             except ValueError:
-                logging.error("Run not found")
+                logger.error("Run not found")
                 run = None
             try:
                 ts = int(cols[1])
@@ -135,7 +147,7 @@ def parse_slow_control(filename, target_run)-> dict:
                     ts_day = dt_hour.strftime("%Y-%m-%d")
                     ts_hour = dt_hour.strftime("%H:%M")
                 except Exception as e:
-                    logging.error(f"SLOWCONTROL file, error converting timestamp: {e}")
+                    logger.error(f"SLOWCONTROL file, error converting timestamp: {e}")
                     ts_day = None
                     ts_hour = None
             except ValueError:
@@ -144,28 +156,40 @@ def parse_slow_control(filename, target_run)-> dict:
             try:
                 temperature = float(cols[3])
             except ValueError:
-                logging.warning("SLOWCONTROL file, could not retrieve effective temperature.")
+                logger.warning("SLOWCONTROL file, could not retrieve effective temperature.")
                 temperature = None
             try:
                 humidity = float(cols[4])
             except ValueError:
-                logging.warning("SLOWCONTROL file, could not retrieve humidity (%).")
+                logger.warning("SLOWCONTROL file, could not retrieve humidity (%).")
                 humidity = None
             try:
                 wp = float(cols[5])
             except ValueError:
-                logging.warning("SLOWCONTROL file, could not retrieve working point temperature.")
+                logger.warning("SLOWCONTROL file, could not retrieve working point temperature.")
                 wp = None
-            try:
-                tr = float(cols[43])
-            except:
-                logging.warning("SLOWCONTROL file, could not retrieve tr.")
+
+            if sc_lenght_ctrl ==1:
                 tr = None
-            try:
-                ar = float(cols[44])
-            except:
-                logging.warning("SLOWCONTROL file, could not retrieve accidental rate.")
+            else: tr = float(cols[43])
+
+            if sc_lenght_ctrl ==1:
                 ar = None
+            else: ar = float(cols[44])
+ 
+            if sc_lenght_ctrl ==1:
+                    DAC10 = None
+            else:
+                DAC10  = []
+                for i in range(6, 22):
+                    DAC10.append(float(cols[i]))
+
+            if sc_lenght_ctrl ==1:
+                OR32_counts = None
+            else:
+                OR32_counts = []
+                for i in range(45, 61):
+                    OR32_counts.append(float(cols[i]))
 
             slowcontrol_dict = {
                 "run": run,
@@ -177,6 +201,10 @@ def parse_slow_control(filename, target_run)-> dict:
                 "wp": wp,
                 "tr": tr,
                 "ar": ar,
+                "DAC10": DAC10,
+                "OR32_counts": OR32_counts,
+                "length": len(cols),
+
             }
             return_list.append(slowcontrol_dict)
     return return_list
@@ -193,7 +221,7 @@ def parse_log_file(file_path, target_run)-> dict:
     
     Returns a dictionary with these values (run excluded).
     """
-    logging.debug("Parsing LOG file.")
+    logger.debug("Parsing LOG file.")
     data = {}
     or32_counts = {}
     run = None
@@ -230,14 +258,14 @@ def parse_log_file(file_path, target_run)-> dict:
 
     data["OR32_counts"] = or32_counts
     if int(run)!=int(target_run):
-        logging.error(f"Run mismatch: file has run {run}, expected {target_run}.")
+        logger.error(f"Run mismatch: file has run {run}, expected {target_run}.")
         data = None
 
     return data
 
 def parse_conteggi(file_path) -> list:
     data = []
-    logging.debug("Parsing CONTEGGI file.")
+    logger.debug("Parsing CONTEGGI file.")
     with open(file_path, "r") as f:
         for line in f:
             parts = line.strip().split("\t")
@@ -265,3 +293,79 @@ def parse_conteggi(file_path) -> list:
 
 
 
+@contextmanager
+def temp_file_manager(delete_on_failure=True):
+    """Context manager for safely creating a temporary file."""
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', dir="/tmp", delete=False) as tf:
+            tmp_path = Path(tf.name)
+            yield tmp_path  # give control back to the block
+    except Exception as e:
+        if delete_on_failure and tmp_path and tmp_path.exists():
+            tmp_path.unlink()
+        logger.error(f"Error creating temp file {tmp_path}: {e}")
+        open(tmp_path, "w").close()
+        
+
+@contextmanager
+def temp_to_output(output_path: Path, success_message= ""):
+    """
+    Context manager that:
+    - creates a temp file in scratch_dir
+    - yields its Path for writing
+    - copies it safely to output_path on success
+    - ensures output file exists even on failure
+    - cleans scratch
+    """
+
+    output_path = Path(output_path)
+    #scratch_dir = Path(scratch_dir)
+
+    scratch_tmp = None
+    final_tmp = output_path.with_suffix(output_path.suffix + ".tmp")
+
+    try:
+        # create scratch temp file
+        with tempfile.NamedTemporaryFile(
+            #mode="w", commented out because specific for txt file. 
+            dir="/tmp",
+            delete=False
+        ) as tf:
+            scratch_tmp = Path(tf.name)
+
+        # give control back to user code
+        yield scratch_tmp
+        logger.debug(f"Successfully filled {scratch_tmp}, copying into {final_tmp}.")
+
+    except Exception as e:
+        logging.error(f"Failed filling {scratch_tmp}: {e}. Creating empty output at {final_tmp}.")
+        # Ensure Snakemake sees the file
+        scratch_tmp.touch(exist_ok=True)
+        #raise  # propagate if you want job to fail
+    finally:
+        #import pdb; pdb.set_trace()
+        # Always create output
+        shutil.copy2(scratch_tmp, final_tmp)
+        _atomic_replace(final_tmp, output_path, retries=10)
+        # Always cleanup
+        scratch_tmp.unlink(missing_ok=True)
+        if success_message=="":
+            logger.info(f"Successfully renamed temporary file into its final destination: {output_path} and temporary file deleted.")
+        else:
+            logger.info(success_message + f"\nSuccessfully renamed file into its final destination: {output_path} and temporary file deleted.")
+        #final_tmp.unlink(missing_ok=True)
+
+
+def copy_on_system(temp_file, final_file):
+    try:
+        tmp_onsystem = final_file.with_suffix(final_file.suffix + ".tmp")
+        shutil.copy2(temp_file, tmp_onsystem)
+        _atomic_replace(tmp_onsystem, final_file, retries=10)
+        #os.replace(tmp_onsystem, final_file)
+    except Exception as e:
+        logger.error(f"Failed moving {temp_file} to {final_file}: {e}")
+        open(final_file, "w").close()
+    finally:
+        #tmp_onsystem.unlink(missing_ok=True)
+        temp_file.unlink(missing_ok=True)
