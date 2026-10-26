@@ -202,7 +202,8 @@ def MakeTracks(
                 p2 = clusters_2[j] + Z_add[1]
                 exp_res_2 = p2 - exp_p2
 
-                if abs(exp_res_2) < proximity_cut:
+                #if abs(exp_res_2) < proximity_cut:
+                if True: # temporary change: check all clusters in plane 2, even if they are far from the expected position 
                     expected_position_res_p2.append(exp_res_2)
                     ntracks += 1
                     ntrack_cl3 += 1
