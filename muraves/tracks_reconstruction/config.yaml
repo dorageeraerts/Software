@@ -10,7 +10,7 @@ data_path: '/pnfs/iihe/muraves/muraves_DATA'
 # temporary folder for intermediate files: it will be deleted at the end of the execution
 # it works on condor node, working node or on your local laptop.
 
-copy_to_data: True 
+copy_to_data: False
 # True:  temporary files will be copied to the data_path at the end of the execution, and deleted from the scratch_path
 # False: they will be copied into your home directory $HOME/muraves_outputs, and deleted from the scratch_path
 
@@ -28,7 +28,8 @@ type:
   - ADC
 
 batch_idx: 
-  "7, 13, 23, 30, 32, 35, 39, 53, 58, 68, 70, 73, 75, 106, 116, 140, 143, 144, 145, 147" #"0-100" # batch of runs to be executed. It can be specified as:
+  "40"
+  #"7, 13, 23, 30, 32, 35, 39, 53, 58, 68, 70, 73, 75, 106, 116, 140, 143, 144, 145, 147" #"0-100" # batch of runs to be executed. It can be specified as:
 
 run:
   # A-B: execute from A to B
@@ -41,7 +42,7 @@ run:
   #2500,2509
   
   # A: execute A
-  #"2500"
+  #"4000-4010"
 
 
 logs_on_console: False #(True/False)

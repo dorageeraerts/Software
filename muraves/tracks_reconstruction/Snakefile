@@ -180,7 +180,8 @@ rule analyse:
     container: '/user/dgeeraer/muraves-sing.sif'
     input:
         script = "4_MainRecSof/MURAVES_reco.py",
-        data_file = '{output_path}/PARSED/{color}/v0/ADC_batch{batch_idx}.stamp',
+        #data_file = '{output_path}/PARSED/{color}/v0/ADC_batch{batch_idx}.stamp',
+        data_file = f'{PNFS}/PARSED/{{color}}/v0/ADC_batch{{batch_idx}}.stamp',
         one_phe_files = "{output_path}/PEDESTAL/{color}/{version}/PEDESTAL_BENCHMARK_{color}.stamp",
         reco_parameters = RECO_PARAMETERS_FILE,
         spiroc_mapping = SPIROC_MAPPING_FILE,
