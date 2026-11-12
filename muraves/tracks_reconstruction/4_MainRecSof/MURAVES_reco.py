@@ -577,6 +577,8 @@ def run_reconstruction(
         raise ValueError(f"Unsupported detector color: {color}")
     z_add = [float(v) for v in geometry_cfg[color]["z_add"]]
     x_pos = [float(v) for v in geometry_cfg[color]["x_pos"]]
+    # optional plane positions of the Y view (alignment); default: same as the Z view
+    x_pos_y = [float(v) for v in geometry_cfg[color].get("x_pos_y", x_pos)]
 
     y_add = [float(v) for v in reco_cfg["y_add"]]
 
@@ -1069,7 +1071,7 @@ def run_reconstruction(
                 results_p3y.TimeExpansions,
                 results_p4y.TimeExpansions,
                 proximity_cut_xy,
-                x_pos,
+                x_pos_y,
                 y_add,
                 sigma_y,
                 tracking_cfg=tracking_cfg
@@ -1873,7 +1875,7 @@ def main() -> None:
         progress_every=args.progress_every,
         cluster_smearing_seed=args.cluster_smearing_seed,
         config=config,
-        reco_config_file=args.base_config or args.config,
+        reco_config_file=args.config or args.base_config,
     )
 
     with Pool(args.num_threads) as pool:

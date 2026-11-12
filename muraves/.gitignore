@@ -1,0 +1,6 @@
+# alignment plots (generated)
+images/gauss/
+
+# snakemake logs and matplotlib/fontconfig cache (generated)
+tracks_reconstruction/logs/
+tracks_reconstruction/.cache/

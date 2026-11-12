@@ -1,0 +1,48 @@
+# alignment plots (generated)
+images/
+# alignment plots (generated)
+images/second_iter/
+# alignment plots (generated)
+images/with_tilt/
+# alignment plots (generated)
+images/unbiased/
+# alignment plots (generated)
+images/corr/
+# alignment plots (generated)
+images/with_promity_cut/
+# alignment plots (generated)
+images/gauss_iterative/
+# alignment plots (generated)
+images/unbiased_corr/
+# alignment plots (generated)
+images/gauss_iterative_unbiased/
+# alignment plots (generated)
+images/gauss_unbiased/
+# alignment plots (generated)
+images/unbiased_prox_cut/
+# alignment plots (generated)
+images/split_ordered/
+# alignment plots (generated)
+images/split_random/
+# alignment plots (generated)
+images/IGU_split_ordered/
+# alignment plots (generated)
+images/IGU_split_random/
+# alignment plots (generated)
+images/split_ordered_forward/
+# alignment plots (generated)
+images/split_random_forward/
+# alignment plots (generated)
+images/IG_split_random/
+# alignment plots (generated)
+images/IGU_forward/
+# alignment plots (generated)
+images/MU_forward/
+# alignment plots (generated)
+images/MU_uncorrected/
+# alignment plots (generated)
+images/IG/
+# alignment plots (generated)
+images/IGU_split_random_forward/
+# alignment plots (generated)
+images/IGU_split_ordered_forward/

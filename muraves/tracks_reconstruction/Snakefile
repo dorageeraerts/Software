@@ -45,16 +45,30 @@ def parse_batch_indices(batch_string):
 
 #>>>>>~~~~~~~~~~~~~~~~~~ GLOBAL PARAMETERS  ~~~~~~~~~~~~~~~~~~~
 PNFS = config['data_path']
-HOME = os.path.expandvars('/user/dgeeraer/MURAVES/output_track_reconstruction')
+HOME = os.path.expandvars('/user/dgeeraer/MURAVES/test_data/alignment/AFTER_ALIGNMENT')
 BATCH_SIZE = config['batch_size'] 
 THREADS = config['threads']
 EXEC_CFG = config.get('execution_config', {})
 RECO_PARAMETERS_FILE = EXEC_CFG.get('reco_parameters_file', 'muraves_cfg_files/reco_parameters.json')
+ALIGNED_RECO_PARAMETERS_FILE = EXEC_CFG.get(
+    'aligned_reco_parameters_file',
+    '../alignment/geometry/reco_parameters_aligned_runs4000-4100.json',
+)
 RECO_OVERRIDE_FILE = EXEC_CFG.get('reco_override_file', '')
 SPIROC_MAPPING_FILE = EXEC_CFG.get('spiroc_mapping_file', 'muraves_cfg_files/spiroc-hybrid-map.cfg')
-TELESCOPE_CFG_TEMPLATE = EXEC_CFG.get('telescope_cfg_template', 'muraves_cfg_files/telescope{color}.cfg')
+TELESCOPE_CFG_TEMPLATE = (
+    EXEC_CFG.get('aligned_telescope_cfg_template', 'muraves_cfg_files/aligned/telescope{color}_aligned.cfg')
+    if config.get('align', False)
+    else EXEC_CFG.get('telescope_cfg_template', 'muraves_cfg_files/telescope{color}.cfg')
+)
 PEDESTAL_BENCHMARK_TEMPLATE = EXEC_CFG.get('pedestal_benchmark_template', 'muraves_cfg_files/pedestal_1phe_values/{color}_PED_BANCHMARK')
-SELECTED_RECO_CONFIG = RECO_OVERRIDE_FILE if RECO_OVERRIDE_FILE else RECO_PARAMETERS_FILE
+SELECTED_RECO_CONFIG = (
+    RECO_OVERRIDE_FILE
+    if RECO_OVERRIDE_FILE
+    else (ALIGNED_RECO_PARAMETERS_FILE if config.get('align', False) else RECO_PARAMETERS_FILE)
+)
+RECO_SUBDIR = f"{config['reco_subdir']}/" if config.get('reco_subdir') else ''
+RECO_OUTPUT = '{output_path}/RECONSTRUCTED/{color}/' + RECO_SUBDIR + '{version}/MURAVES_AnalyzedData_batch{batch_idx}.stamp'
 CLUSTER_SMEARING_SEED = config.get('cluster_smearing_seed', None)
 SLOW_CONTROL_PREFIX = config.get('slow_control_prefix', 'SLOWCONTROL_run')
 if config['run']:
@@ -73,7 +87,7 @@ localrules: all
 rule all:
     input:
         expand(
-            '{output_path}/RECONSTRUCTED/{color}/{version}/MURAVES_AnalyzedData_batch{batch_idx}.stamp',
+            RECO_OUTPUT,
             output_path=PNFS if config.get('copy_to_data') else HOME,
             color=config['hodoscope'],
             version=config['version'],
@@ -184,15 +198,15 @@ rule analyse:
         data_file = f'{PNFS}/PARSED/{{color}}/v0/ADC_batch{{batch_idx}}.stamp',
         one_phe_files = "{output_path}/PEDESTAL/{color}/{version}/PEDESTAL_BENCHMARK_{color}.stamp",
         reco_parameters = RECO_PARAMETERS_FILE,
+        reco_config = SELECTED_RECO_CONFIG,
         spiroc_mapping = SPIROC_MAPPING_FILE,
         telescope_cfg = lambda wildcards: TELESCOPE_CFG_TEMPLATE.format(color=wildcards.color)
     output:
-        output_filename = '{output_path}/RECONSTRUCTED/{color}/{version}/MURAVES_AnalyzedData_batch{batch_idx}.stamp',
+        output_filename = RECO_OUTPUT,
     params:
         raw_base = f'{PNFS}/RAW_GZ',
         tracks_base = '.',
         pedestal_folder = lambda wildcards: f'{wildcards.output_path}/PEDESTAL/{wildcards.color}/{wildcards.version}/{wildcards.color}',
-        reco_config_file = SELECTED_RECO_CONFIG,
         slow_control_prefix = SLOW_CONTROL_PREFIX,
         cluster_smearing_seed_arg = (
             f'--cluster-smearing-seed {CLUSTER_SMEARING_SEED}'
@@ -210,7 +224,7 @@ rule analyse:
         "--spiroc-mapping-file {input.spiroc_mapping} "
         "--telescope-config-file {input.telescope_cfg} "
         "--base-config {input.reco_parameters} "
-        "--config {params.reco_config_file} "
+        "--config {input.reco_config} "
         "{params.cluster_smearing_seed_arg} "
         "--write-root "
         "-th {threads} "
@@ -232,7 +246,3 @@ rule analyse:
 #        rsync -av {input} {output} &&
 #        rm {input}
 #        """
-
-
-
-

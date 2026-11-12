@@ -10,9 +10,11 @@ data_path: '/pnfs/iihe/muraves/muraves_DATA'
 # temporary folder for intermediate files: it will be deleted at the end of the execution
 # it works on condor node, working node or on your local laptop.
 
-copy_to_data: False
+copy_to_data: True
 # True:  temporary files will be copied to the data_path at the end of the execution, and deleted from the scratch_path
 # False: they will be copied into your home directory $HOME/muraves_outputs, and deleted from the scratch_path
+
+reco_subdir: "alignment_study/unbiased_plus_second_iter" # optional: reconstructed files go to <data_path>/RECONSTRUCTED/<color>/<reco_subdir>/<version>. Leave empty for the standard location.
 
 batch_size: 1 # number of runs to be executed in parallel.
 threads: 1 # number of cores requested per rule.
@@ -28,7 +30,9 @@ type:
   - ADC
 
 batch_idx: 
-  "40"
+  "40-60"
+  #"40-101"
+  #"40"
   #"7, 13, 23, 30, 32, 35, 39, 53, 58, 68, 70, 73, 75, 106, 116, 140, 143, 144, 145, 147" #"0-100" # batch of runs to be executed. It can be specified as:
 
 run:
@@ -47,11 +51,17 @@ run:
 
 logs_on_console: False #(True/False)
 verbose: info # (debug/info/warning/error/critical)
-overwrite_outputs: False # (True/False) if True, existing output files will be overwritten. If False, existing output files will be kept and the corresponding runs will be skipped.
+overwrite_outputs: True # (True/False) if True, existing output files will be overwritten. If False, existing output files will be kept and the corresponding runs will be skipped.
+align: True # (True/False) use aligned telescope configuration files
 
 #-----------execution configuration files-----------------
 execution_config:
   reco_parameters_file: "muraves_cfg_files/reco_parameters.json"
+  #aligned_reco_parameters_file: "../alignment/geometry/reco_parameters_aligned_runs4000-4100.json"
+  #aligned_reco_parameters_file: "../alignment/geometry/second_iter/reco_parameters_aligned_runs4000-4100.json"
+  # unbiased (iter 1) + second_iter (iter 2) shifts summed on top of the nominal geometry
+  aligned_reco_parameters_file: "../alignment/geometry/unbiased_plus_second_iter/reco_parameters_aligned_runs4000-4100.json"
+  aligned_telescope_cfg_template: "../alignment/geometry/unbiased_plus_second_iter/telescope{color}_aligned_runs4000-4100.cfg"
   # Optional override file merged on top of reco_parameters_file. Leave empty to disable.
   reco_override_file: ""
   spiroc_mapping_file: "muraves_cfg_files/spiroc-hybrid-map.cfg"
@@ -59,4 +69,3 @@ execution_config:
   # Benchmark 1phe input files (ped_onephe_sk*.txt), one folder per telescope.
   # All runs of a telescope share the pedestal_N files derived from these.
   pedestal_benchmark_template: "muraves_cfg_files/pedestal_1phe_values/{color}_PED_BANCHMARK"
-
